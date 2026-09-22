@@ -1,3 +1,7 @@
 .streamlit/secrets.toml
+config.json
+transfer_log.csv
 __pycache__/
 *.pyc
+.venv/
+.agents/
