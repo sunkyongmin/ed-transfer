@@ -19,6 +19,7 @@ import nemc_api as api
 import transfer_log as tlog
 import triage_rules as tr
 
+APP_VERSION = "2026-09-22c"
 st.set_page_config(page_title="전원병원 선정 도우미", page_icon="🚑", layout="wide")
 
 # ---------------------------------------------------------------------------
@@ -429,7 +430,7 @@ d1c, d2c = st.columns([1, 3])
 if d1c.button("✅ 이 진단으로 전원병원 검색", type="primary", use_container_width=True):
     st.session_state.dx_list = [tr.catalog_dx(sel_idx)]
     st.session_state.dx_pick = 0
-    st.rerun()
+    st.session_state.pop("allow_no_dx", None)
 _n = tr.DIAGNOSIS_CATALOG[sel_idx][4]
 if _n:
     d2c.caption("비고: " + _n)
@@ -454,7 +455,8 @@ if dx_list:
 st.subheader("2️⃣ 전원병원 후보")
 if chosen_dx is not None:
     sc1, sc2 = st.columns([5, 1])
-    _cat_txt = f"{severe_n:02d}. {api.SEVERE_TYPES[severe_n]}" if severe_n else "분류 없음 (응급실 병상·장비 기준)"
+    _cat_txt = (f"{severe_n:02d}. {api.SEVERE_TYPES[severe_n]}" if severe_n
+                else "중증질환 27개 분류 외 — 수용가능 조회 대상이 아니므로 필요자원·응급실 병상·거리 기준으로 정렬")
     _res_txt = (" · 필요자원: " + ", ".join(RESOURCE_LABELS[r] for r in required_res)) if required_res else ""
     sc1.markdown(f"**선택 진단:** {chosen_dx.name} → **{_cat_txt}**{_res_txt}"
                  + (f"  \n<small>{chosen_dx.note}</small>" if chosen_dx.note else ""), unsafe_allow_html=True)
@@ -462,7 +464,7 @@ if chosen_dx is not None:
         st.session_state.dx_list = []
         st.rerun()
 else:
-    st.caption("1️⃣에서 진단을 고르면 그에 맞는 수용가능 병원이 조회됩니다. 지금은 응급실 병상·거리 기준입니다.")
+    st.caption("1️⃣에서 진단을 고르고 검색 버튼을 누르면 그 진단의 수용가능 병원이 조회됩니다. 지금은 진단 미선택 상태라 응급실 병상·거리 기준입니다.")
 
 if not service_key:
     st.warning("왼쪽 사이드바에서 공공데이터포털 인증키를 저장하세요. (data.go.kr → 마이페이지 → 인증키 발급현황의 **일반 인증키(Decoding)**)")
@@ -529,7 +531,7 @@ def sort_key(h: api.Hospital) -> tuple:
 cands.sort(key=sort_key)
 
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("기준 위치", origin_label)
+m1.markdown(f"<small>기준 위치</small><br><b>{origin_label}</b>", unsafe_allow_html=True)
 m2.metric("후보 병원 수", len(cands))
 if severe_n:
     m3.metric("수용 가능 확인", sum(1 for h in cands if api.severe_status(h, severe_n) == "가능" and not api.blocked_for(h, severe_n)))
@@ -548,7 +550,7 @@ for i, h in enumerate(cands, 1):
         if api.blocked_for(h, severe_n):
             acc = "⛔ 차단메시지"
     else:
-        acc = "⛔ 차단메시지" if api.blocked_for(h, None) else "—"
+        acc = "⛔ 차단메시지" if api.blocked_for(h, None) else ("분류 외" if chosen_dx is not None else "미선택")
     res_txt = " ".join(
         f"{RESOURCE_LABELS[r]}:{(h.equip(r) or '?') if r in api.EQUIP_FIELDS else (h.bed(r) if h.bed(r) is not None else '?')}"
         for r in required_res)
@@ -712,6 +714,6 @@ if saved:
             st.error(f"저장 실패: {e}")
 
 st.divider()
-st.caption("병상·수용가능 정보는 각 기관 자가입력값으로, "
+st.caption(f"버전 {APP_VERSION} · 병상·수용가능 정보는 각 기관 자가입력값으로, "
            "전원 결정 전 반드시 응급실 직통전화로 확인하십시오. 거리는 직선거리입니다. "
            "자료: 국립중앙의료원 전국 응급의료기관 정보 조회 서비스(공공데이터포털).")
