@@ -16,6 +16,7 @@ import pandas as pd
 import streamlit as st
 
 import nemc_api as api
+import transfer_log as tlog
 import triage_rules as tr
 
 st.set_page_config(page_title="전원병원 선정 도우미", page_icon="🚑", layout="wide")
@@ -388,6 +389,21 @@ with st.sidebar:
     if c2.button("캐시 초기화", use_container_width=True):
         st.cache_data.clear()
 
+    st.divider()
+    st.subheader("전원 기록")
+    _store, _store_err = tlog.make_store(APP_DIR, lambda k: st.secrets.get(k) if hasattr(st, "secrets") else None)
+    if _store_err:
+        st.warning(_store_err)
+    try:
+        _all_logs = _store.read_all()
+    except Exception as _e:
+        _all_logs = []; st.caption(f"기록을 읽지 못했습니다: {_e}")
+    _n_ep = len({r.get("episode_id") for r in _all_logs})
+    st.caption(f"{_store.describe()} · 에피소드 {_n_ep}건 / 연락 {len(_all_logs)}행")
+    if _all_logs:
+        st.download_button("⬇️ 기록 CSV 다운로드", data=pd.DataFrame(_all_logs).to_csv(index=False).encode("utf-8-sig"),
+                           file_name=f"transfer_log_{datetime.now():%Y%m%d}.csv", mime="text/csv", use_container_width=True)
+
 # ---------------------------------------------------------------------------
 # 1. 추정 진단 선택
 # ---------------------------------------------------------------------------
@@ -616,6 +632,84 @@ with tab2:
     st.map(pd.concat([m[["_lat", "_lon", "color", "size"]], origin_df]), latitude="_lat", longitude="_lon",
            color="color", size="size", zoom=11)
     st.caption("주황: 동신병원 · 초록: 수용가능 · 빨강: 불가/차단 · 파랑: 정보없음")
+
+# ---------------------------------------------------------------------------
+# 3. 전원 기록 (연구용 로그 — 환자 식별정보 없음)
+# ---------------------------------------------------------------------------
+st.subheader("3️⃣ 전원 기록")
+if "ep" not in st.session_state:
+    st.session_state.ep = {"id": tlog.new_episode_id(), "calls": []}
+ep = st.session_state.ep
+_row_by_hpid = {r["_hpid"]: r for r in rows}
+_top5 = "|".join(f"{r['병원']}({r['수용']},{r['거리(km)']}km)" for r in rows[:5])
+
+with st.expander("연락한 병원 추가", expanded=True):
+    e1, e2, e3, e4 = st.columns([3, 1.2, 1.5, 1.2])
+    call_hp = e1.selectbox("연락한 병원", options=[h.hpid for h in cands],
+                           format_func=lambda hp: f"{_row_by_hpid[hp]['순위']}. {_row_by_hpid[hp]['병원']}", key="call_hp")
+    call_result = e2.selectbox("결과", ["수용", "거부", "무응답·보류"], key="call_result")
+    refusal = e3.selectbox("거부 사유", ["", "병상 없음", "중환자실 없음", "전문의 부재", "수술·시술 중", "장비 불가", "환자 상태 부적합", "기타"],
+                           key="refusal")
+    call_time = e4.text_input("연락 시각 (HH:MM, 비우면 추가 시각)", value="", key="call_time")
+    if st.button("➕ 목록에 추가", use_container_width=True):
+        r = _row_by_hpid[call_hp]
+        ep["calls"].append({
+            "call_order": len(ep["calls"]) + 1, "hospital_hpid": call_hp, "hospital_name": r["병원"], "hospital_level": r["등급"],
+            "app_rank": r["순위"], "app_accept_status": r["수용"], "app_er_beds": r["응급실 가용/기준"],
+            "app_distance_km": r["거리(km)"], "call_time": call_time.strip() or datetime.now().strftime("%H:%M"),
+            "call_logged_at": tlog.now_str(), "call_result": call_result,
+            "refusal_reason": refusal if call_result != "수용" else "",
+        })
+        st.rerun()
+
+if ep["calls"]:
+    st.dataframe(pd.DataFrame(ep["calls"])[["call_order", "hospital_name", "app_rank", "app_accept_status", "call_time", "call_result", "refusal_reason"]]
+                 .rename(columns={"call_order": "순서", "hospital_name": "병원", "app_rank": "앱 순위", "app_accept_status": "앱 표시",
+                                  "call_time": "연락", "call_result": "결과", "refusal_reason": "사유"}),
+                 hide_index=True, use_container_width=True)
+    if st.button("마지막 항목 삭제"):
+        ep["calls"].pop(); st.rerun()
+
+with st.form("episode_form"):
+    f1, f2, f3, f4 = st.columns(4)
+    age_band = f1.selectbox("연령대", ["", "0-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80-89", "90+"])
+    sex_ = f2.selectbox("성별", ["", "M", "F"])
+    ktas = f3.selectbox("KTAS", ["", "1", "2", "3", "4", "5"])
+    outcome = f4.selectbox("에피소드 결과", ["전원 완료", "전원 못함 — 자체 처치/입원", "전원 못함 — 사망", "전원 못함 — 기타", "기록만"])
+    g1, g2, g3 = st.columns([1, 1, 3])
+    decision_time = g1.text_input("전원 결정 시각 (HH:MM)", value="")
+    accept_time = g2.text_input("수용 확정 시각 (HH:MM)", value="")
+    note = g3.text_input("메모 (식별정보 금지)", value="")
+    _acc_opts = [""] + [c["hospital_hpid"] for c in ep["calls"] if c["call_result"] == "수용"]
+    accepted_hp = st.selectbox("최종 전원 병원", options=_acc_opts, index=len(_acc_opts) - 1,
+                               format_func=lambda hp: "(없음)" if not hp else next(c["hospital_name"] for c in ep["calls"] if c["hospital_hpid"] == hp))
+    saved = st.form_submit_button("💾 에피소드 저장", type="primary", use_container_width=True)
+if saved:
+    if not ep["calls"] and outcome == "전원 완료":
+        st.error("연락한 병원을 먼저 추가하세요.")
+    elif chosen_dx is None and not st.session_state.get("allow_no_dx"):
+        st.warning("추정 진단이 선택되지 않았습니다. 1️⃣에서 진단을 고른 뒤 저장하세요. "
+                   "진단 없이 저장하려면 아래를 체크하고 다시 저장을 누르세요.")
+        st.checkbox("진단 없이 저장", key="allow_no_dx")
+    else:
+        base = {"episode_id": ep["id"], "logged_at": tlog.now_str(), "origin_hpid": origin.get("hpid", ""), "origin_name": origin["name"],
+                "age_band": age_band, "sex": sex_, "ktas": ktas,
+                "diagnosis": chosen_dx.name if chosen_dx else "", "category_no": severe_n or "",
+                "category_name": api.SEVERE_TYPES.get(severe_n, "") if severe_n else "", "app_top5": _top5,
+                "episode_outcome": outcome, "decision_time": decision_time, "accept_time": accept_time, "note": note}
+        out_rows = []
+        for c in ep["calls"] or [{}]:
+            r = dict(base); r.update(c); r["final_accepted"] = "Y" if c.get("hospital_hpid") and c.get("hospital_hpid") == accepted_hp else "N"
+            out_rows.append(r)
+        try:
+            _store.append(out_rows)
+            st.success(f"저장했습니다 ({len(out_rows)}행, {_store.describe()}).")
+            st.session_state.ep = {"id": tlog.new_episode_id(), "calls": []}
+            st.session_state.dx_list = []
+            st.session_state.pop("allow_no_dx", None)
+            st.rerun()
+        except Exception as e:
+            st.error(f"저장 실패: {e}")
 
 st.divider()
 st.caption("병상·수용가능 정보는 각 기관 자가입력값으로, "
