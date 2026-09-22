@@ -17,6 +17,13 @@ import csv
 import json
 import uuid
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+KST = ZoneInfo("Asia/Seoul")
+
+
+def now_kst() -> datetime:
+    return datetime.now(KST)
 from pathlib import Path
 
 FIELDS = [
@@ -114,8 +121,8 @@ def make_store(app_dir: Path, secrets_get) -> tuple[object, str | None]:
 
 
 def new_episode_id() -> str:
-    return datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
+    return now_kst().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
 
 
 def now_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return now_kst().strftime("%Y-%m-%d %H:%M:%S")

@@ -212,7 +212,7 @@ def cached_realtime(key: str, region_names: tuple):
                 msgs.setdefault(hp, []).extend(lst)
         except api.NEMCError:
             pass
-    return beds, severe, msgs, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return beds, severe, msgs, tlog.now_kst().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def search_hospital(key: str, sido: str, name: str) -> tuple[list[dict], int]:
@@ -402,7 +402,7 @@ with st.sidebar:
     st.caption(f"{_store.describe()} · 에피소드 {_n_ep}건 / 연락 {len(_all_logs)}행")
     if _all_logs:
         st.download_button("⬇️ 기록 CSV 다운로드", data=pd.DataFrame(_all_logs).to_csv(index=False).encode("utf-8-sig"),
-                           file_name=f"transfer_log_{datetime.now():%Y%m%d}.csv", mime="text/csv", use_container_width=True)
+                           file_name=f"transfer_log_{tlog.now_kst():%Y%m%d}.csv", mime="text/csv", use_container_width=True)
 
 # ---------------------------------------------------------------------------
 # 1. 추정 진단 선택
@@ -656,7 +656,7 @@ with st.expander("연락한 병원 추가", expanded=True):
         ep["calls"].append({
             "call_order": len(ep["calls"]) + 1, "hospital_hpid": call_hp, "hospital_name": r["병원"], "hospital_level": r["등급"],
             "app_rank": r["순위"], "app_accept_status": r["수용"], "app_er_beds": r["응급실 가용/기준"],
-            "app_distance_km": r["거리(km)"], "call_time": call_time.strip() or datetime.now().strftime("%H:%M"),
+            "app_distance_km": r["거리(km)"], "call_time": call_time.strip() or tlog.now_kst().strftime("%H:%M"),
             "call_logged_at": tlog.now_str(), "call_result": call_result,
             "refusal_reason": refusal if call_result != "수용" else "",
         })
