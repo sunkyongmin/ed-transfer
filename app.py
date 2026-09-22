@@ -19,7 +19,7 @@ import nemc_api as api
 import transfer_log as tlog
 import triage_rules as tr
 
-APP_VERSION = "2026-09-22d"
+APP_VERSION = "2026-09-22e"
 st.set_page_config(page_title="전원병원 선정 도우미", page_icon="🚑", layout="wide")
 
 # ---------------------------------------------------------------------------
@@ -354,9 +354,16 @@ with st.sidebar:
     st.caption(f"현재: {origin['name']} ({origin.get('sido', '')})" + ("" if origin.get("hpid") else " — 기본값, 아래에서 우리 병원으로 바꾸세요"))
     if origin.get("hpid"):
         from urllib.parse import quote
-        _link = f"?hpid={origin['hpid']}&sido={quote(origin.get('sido', ''))}"
-        st.caption("이 병원 기준으로 바로 열리는 주소 (앱 주소 뒤에 붙여 즐겨찾기):")
-        st.code(_link, language=None)
+        _q = f"?hpid={origin['hpid']}&sido={quote(origin.get('sido', ''))}"
+        _base = _secret("APP_URL")
+        if not _base:
+            try:
+                _base = str(st.context.url).split("?")[0]   # 현재 접속 주소 (Streamlit 1.42+)
+            except Exception:
+                _base = ""
+        _base = _base.rstrip("/")
+        st.caption("이 병원 기준으로 바로 열리는 주소 — 복사해서 즐겨찾기에 저장:")
+        st.code((_base + "/" if _base else "") + _q, language=None)
     with st.expander("기준 병원 변경", expanded=not origin.get("hpid")):
         o_sido = st.selectbox("시도", options=list(SIDO_NAMES.keys()),
                               index=list(SIDO_NAMES.keys()).index(origin.get("sido")) if origin.get("sido") in SIDO_NAMES else 0)
