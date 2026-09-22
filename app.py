@@ -19,7 +19,7 @@ import nemc_api as api
 import transfer_log as tlog
 import triage_rules as tr
 
-APP_VERSION = "2026-09-22c"
+APP_VERSION = "2026-09-22d"
 st.set_page_config(page_title="전원병원 선정 도우미", page_icon="🚑", layout="wide")
 
 # ---------------------------------------------------------------------------
@@ -301,15 +301,24 @@ if "origin" not in st.session_state:
 origin = st.session_state.origin
 
 
+def sync_query_params(o: dict):
+    """주소창의 ?hpid=&sido= 를 현재 기준 병원과 맞춤 (즐겨찾기용). 매 실행마다 호출."""
+    try:
+        if o.get("hpid"):
+            if st.query_params.get("hpid") != o["hpid"] or st.query_params.get("sido") != o.get("sido", ""):
+                st.query_params["hpid"] = o["hpid"]; st.query_params["sido"] = o.get("sido", "")
+    except Exception:
+        pass
+
+
 def set_origin(o: dict):
     st.session_state.origin = o
     save_config(origin=o)              # 로컬 실행 시 저장 (클라우드에서는 재시작 시 사라짐 → URL 파라미터 사용)
-    try:
-        if o.get("hpid"):
-            st.query_params["hpid"] = o["hpid"]; st.query_params["sido"] = o["sido"]
-    except Exception:
-        pass
+    sync_query_params(o)
     st.cache_data.clear()
+
+
+sync_query_params(origin)
 
 
 with st.sidebar:
@@ -344,7 +353,10 @@ with st.sidebar:
     st.subheader("기준 병원")
     st.caption(f"현재: {origin['name']} ({origin.get('sido', '')})" + ("" if origin.get("hpid") else " — 기본값, 아래에서 우리 병원으로 바꾸세요"))
     if origin.get("hpid"):
-        st.caption("이 병원 기준으로 바로 열리는 주소: 브라우저 주소창의 현재 링크(`?hpid=…`)를 즐겨찾기에 저장하세요.")
+        from urllib.parse import quote
+        _link = f"?hpid={origin['hpid']}&sido={quote(origin.get('sido', ''))}"
+        st.caption("이 병원 기준으로 바로 열리는 주소 (앱 주소 뒤에 붙여 즐겨찾기):")
+        st.code(_link, language=None)
     with st.expander("기준 병원 변경", expanded=not origin.get("hpid")):
         o_sido = st.selectbox("시도", options=list(SIDO_NAMES.keys()),
                               index=list(SIDO_NAMES.keys()).index(origin.get("sido")) if origin.get("sido") in SIDO_NAMES else 0)
