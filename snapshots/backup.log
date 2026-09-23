@@ -12,3 +12,8 @@ Untracked files:
 nothing added to commit but untracked files present (use "git add" to track)
 Everything up-to-date
 20260922_1547 backup done
+[main 92220b6] snapshots backup 20260923_0305
+ 5 files changed, 5131 insertions(+)
+ create mode 100644 snapshots/backup.log
+fatal: could not read Username for 'https://github.com': Device not configured
+20260923_0305 backup done
