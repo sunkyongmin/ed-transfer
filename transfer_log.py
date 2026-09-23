@@ -40,6 +40,8 @@ FIELDS = [
     "call_logged_at",    # '목록에 추가'를 누른 실제 시각 (자동)
     "call_result",       # 수용 / 거부 / 무응답·보류
     "refusal_reason",    # 거부 사유
+    "habitual",          # 평소 전원하던 기관 여부 (Y/N)
+    "deviation_reason",  # 앱 1순위가 아닌 기관에 먼저 연락한 사유 (첫 연락에만 기록)
     "final_accepted",    # 이 병원으로 최종 전원 여부 (Y/N)
     "episode_outcome",   # 전원 완료 / 전원 못함(자체 처치) / 전원 못함(사망) / 기타
     "decision_time",     # 전원 결정 시각 (HH:MM)
@@ -93,11 +95,19 @@ class GSheetStore:
         creds = json.loads(service_account_json)
         gc = gspread.service_account_from_dict(creds)
         self.ws = gc.open_by_url(url).sheet1
-        if not self.ws.row_values(1):
+        header = self.ws.row_values(1)
+        if not header:
             self.ws.append_row(FIELDS)
+            header = list(FIELDS)
+        missing = [f for f in FIELDS if f not in header]
+        if missing:
+            # 기존 열 순서는 그대로 두고 새 열만 뒤에 붙임 (기존 기록 열 밀림 방지)
+            header = header + missing
+            self.ws.update(values=[header], range_name="1:1")
+        self._cols = header
 
     def append(self, rows: list[dict]):
-        self.ws.append_rows([[r.get(k, "") for k in FIELDS] for r in rows])
+        self.ws.append_rows([[r.get(k, "") for k in self._cols] for r in rows])
 
     def read_all(self) -> list[dict]:
         return self.ws.get_all_records()

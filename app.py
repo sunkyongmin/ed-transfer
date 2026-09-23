@@ -19,7 +19,6 @@ import nemc_api as api
 import transfer_log as tlog
 import triage_rules as tr
 
-APP_VERSION = "2026-09-22e"
 st.set_page_config(page_title="전원병원 선정 도우미", page_icon="🚑", layout="wide")
 
 # ---------------------------------------------------------------------------
@@ -301,24 +300,15 @@ if "origin" not in st.session_state:
 origin = st.session_state.origin
 
 
-def sync_query_params(o: dict):
-    """주소창의 ?hpid=&sido= 를 현재 기준 병원과 맞춤 (즐겨찾기용). 매 실행마다 호출."""
-    try:
-        if o.get("hpid"):
-            if st.query_params.get("hpid") != o["hpid"] or st.query_params.get("sido") != o.get("sido", ""):
-                st.query_params["hpid"] = o["hpid"]; st.query_params["sido"] = o.get("sido", "")
-    except Exception:
-        pass
-
-
 def set_origin(o: dict):
     st.session_state.origin = o
     save_config(origin=o)              # 로컬 실행 시 저장 (클라우드에서는 재시작 시 사라짐 → URL 파라미터 사용)
-    sync_query_params(o)
+    try:
+        if o.get("hpid"):
+            st.query_params["hpid"] = o["hpid"]; st.query_params["sido"] = o["sido"]
+    except Exception:
+        pass
     st.cache_data.clear()
-
-
-sync_query_params(origin)
 
 
 with st.sidebar:
@@ -353,17 +343,7 @@ with st.sidebar:
     st.subheader("기준 병원")
     st.caption(f"현재: {origin['name']} ({origin.get('sido', '')})" + ("" if origin.get("hpid") else " — 기본값, 아래에서 우리 병원으로 바꾸세요"))
     if origin.get("hpid"):
-        from urllib.parse import quote
-        _q = f"?hpid={origin['hpid']}&sido={quote(origin.get('sido', ''))}"
-        _base = _secret("APP_URL")
-        if not _base:
-            try:
-                _base = str(st.context.url).split("?")[0]   # 현재 접속 주소 (Streamlit 1.42+)
-            except Exception:
-                _base = ""
-        _base = _base.rstrip("/")
-        st.caption("이 병원 기준으로 바로 열리는 주소 — 복사해서 즐겨찾기에 저장:")
-        st.code((_base + "/" if _base else "") + _q, language=None)
+        st.caption("이 병원 기준으로 바로 열리는 주소: 브라우저 주소창의 현재 링크(`?hpid=…`)를 즐겨찾기에 저장하세요.")
     with st.expander("기준 병원 변경", expanded=not origin.get("hpid")):
         o_sido = st.selectbox("시도", options=list(SIDO_NAMES.keys()),
                               index=list(SIDO_NAMES.keys()).index(origin.get("sido")) if origin.get("sido") in SIDO_NAMES else 0)
@@ -449,7 +429,7 @@ d1c, d2c = st.columns([1, 3])
 if d1c.button("✅ 이 진단으로 전원병원 검색", type="primary", use_container_width=True):
     st.session_state.dx_list = [tr.catalog_dx(sel_idx)]
     st.session_state.dx_pick = 0
-    st.session_state.pop("allow_no_dx", None)
+    st.rerun()
 _n = tr.DIAGNOSIS_CATALOG[sel_idx][4]
 if _n:
     d2c.caption("비고: " + _n)
@@ -474,8 +454,7 @@ if dx_list:
 st.subheader("2️⃣ 전원병원 후보")
 if chosen_dx is not None:
     sc1, sc2 = st.columns([5, 1])
-    _cat_txt = (f"{severe_n:02d}. {api.SEVERE_TYPES[severe_n]}" if severe_n
-                else "중증질환 27개 분류 외 — 수용가능 조회 대상이 아니므로 필요자원·응급실 병상·거리 기준으로 정렬")
+    _cat_txt = f"{severe_n:02d}. {api.SEVERE_TYPES[severe_n]}" if severe_n else "분류 없음 (응급실 병상·장비 기준)"
     _res_txt = (" · 필요자원: " + ", ".join(RESOURCE_LABELS[r] for r in required_res)) if required_res else ""
     sc1.markdown(f"**선택 진단:** {chosen_dx.name} → **{_cat_txt}**{_res_txt}"
                  + (f"  \n<small>{chosen_dx.note}</small>" if chosen_dx.note else ""), unsafe_allow_html=True)
@@ -483,7 +462,7 @@ if chosen_dx is not None:
         st.session_state.dx_list = []
         st.rerun()
 else:
-    st.caption("1️⃣에서 진단을 고르고 검색 버튼을 누르면 그 진단의 수용가능 병원이 조회됩니다. 지금은 진단 미선택 상태라 응급실 병상·거리 기준입니다.")
+    st.caption("1️⃣에서 진단을 고르면 그에 맞는 수용가능 병원이 조회됩니다. 지금은 응급실 병상·거리 기준입니다.")
 
 if not service_key:
     st.warning("왼쪽 사이드바에서 공공데이터포털 인증키를 저장하세요. (data.go.kr → 마이페이지 → 인증키 발급현황의 **일반 인증키(Decoding)**)")
@@ -550,7 +529,7 @@ def sort_key(h: api.Hospital) -> tuple:
 cands.sort(key=sort_key)
 
 m1, m2, m3, m4 = st.columns(4)
-m1.markdown(f"<small>기준 위치</small><br><b>{origin_label}</b>", unsafe_allow_html=True)
+m1.metric("기준 위치", origin_label)
 m2.metric("후보 병원 수", len(cands))
 if severe_n:
     m3.metric("수용 가능 확인", sum(1 for h in cands if api.severe_status(h, severe_n) == "가능" and not api.blocked_for(h, severe_n)))
@@ -569,7 +548,7 @@ for i, h in enumerate(cands, 1):
         if api.blocked_for(h, severe_n):
             acc = "⛔ 차단메시지"
     else:
-        acc = "⛔ 차단메시지" if api.blocked_for(h, None) else ("분류 외" if chosen_dx is not None else "미선택")
+        acc = "⛔ 차단메시지" if api.blocked_for(h, None) else "—"
     res_txt = " ".join(
         f"{RESOURCE_LABELS[r]}:{(h.equip(r) or '?') if r in api.EQUIP_FIELDS else (h.bed(r) if h.bed(r) is not None else '?')}"
         for r in required_res)
@@ -672,6 +651,15 @@ with st.expander("연락한 병원 추가", expanded=True):
     refusal = e3.selectbox("거부 사유", ["", "병상 없음", "중환자실 없음", "전문의 부재", "수술·시술 중", "장비 불가", "환자 상태 부적합", "기타"],
                            key="refusal")
     call_time = e4.text_input("연락 시각 (HH:MM, 비우면 추가 시각)", value="", key="call_time")
+    _sel_rank = _row_by_hpid[call_hp]["순위"] if call_hp in _row_by_hpid else None
+    d1, d2 = st.columns([1.2, 3])
+    habitual = d1.checkbox("평소 전원하던 기관", value=False, key="habitual")
+    if _sel_rank is not None and _sel_rank != 1 and len(ep["calls"]) == 0:
+        deviation = d2.selectbox("앱 1순위가 아닌 기관에 먼저 연락한 이유",
+                                 ["", "정보 불신(과거 거부 경험 등)", "기관 간 관계·전원 절차", "배후 진료과 사정", "기타"],
+                                 key="deviation")
+    else:
+        deviation = ""
     if st.button("➕ 목록에 추가", use_container_width=True):
         r = _row_by_hpid[call_hp]
         ep["calls"].append({
@@ -680,13 +668,14 @@ with st.expander("연락한 병원 추가", expanded=True):
             "app_distance_km": r["거리(km)"], "call_time": call_time.strip() or tlog.now_kst().strftime("%H:%M"),
             "call_logged_at": tlog.now_str(), "call_result": call_result,
             "refusal_reason": refusal if call_result != "수용" else "",
+            "habitual": "Y" if habitual else "N", "deviation_reason": deviation,
         })
         st.rerun()
 
 if ep["calls"]:
-    st.dataframe(pd.DataFrame(ep["calls"])[["call_order", "hospital_name", "app_rank", "app_accept_status", "call_time", "call_result", "refusal_reason"]]
+    st.dataframe(pd.DataFrame(ep["calls"])[["call_order", "hospital_name", "app_rank", "app_accept_status", "habitual", "call_time", "call_result", "refusal_reason"]]
                  .rename(columns={"call_order": "순서", "hospital_name": "병원", "app_rank": "앱 순위", "app_accept_status": "앱 표시",
-                                  "call_time": "연락", "call_result": "결과", "refusal_reason": "사유"}),
+                                  "habitual": "관행", "call_time": "연락", "call_result": "결과", "refusal_reason": "사유"}),
                  hide_index=True, use_container_width=True)
     if st.button("마지막 항목 삭제"):
         ep["calls"].pop(); st.rerun()
@@ -733,6 +722,6 @@ if saved:
             st.error(f"저장 실패: {e}")
 
 st.divider()
-st.caption(f"버전 {APP_VERSION} · 병상·수용가능 정보는 각 기관 자가입력값으로, "
+st.caption("병상·수용가능 정보는 각 기관 자가입력값으로, "
            "전원 결정 전 반드시 응급실 직통전화로 확인하십시오. 거리는 직선거리입니다. "
            "자료: 국립중앙의료원 전국 응급의료기관 정보 조회 서비스(공공데이터포털).")
