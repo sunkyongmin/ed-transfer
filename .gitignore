@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 .venv/
 .agents/
+.DS_Store
+transfer_log*.csv*
+*.bak
