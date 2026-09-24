@@ -656,7 +656,7 @@ with st.expander("연락한 병원 추가", expanded=True):
     habitual = d1.checkbox("평소 전원하던 기관", value=False, key="habitual")
     if _sel_rank is not None and _sel_rank != 1 and len(ep["calls"]) == 0:
         deviation = d2.selectbox("앱 1순위가 아닌 기관에 먼저 연락한 이유",
-                                 ["", "정보 불신(과거 거부 경험 등)", "기관 간 관계·전원 절차", "배후 진료과 사정", "기타"],
+                                 ["", "정보 불신(과거 거부 경험 등)", "기관 간 관계·전원 절차", "배후 진료과 사정", "환자·보호자 요청", "기타"],
                                  key="deviation")
     else:
         deviation = ""
