@@ -665,7 +665,9 @@ with st.expander("연락한 병원 추가", expanded=True):
         ep["calls"].append({
             "call_order": len(ep["calls"]) + 1, "hospital_hpid": call_hp, "hospital_name": r["병원"], "hospital_level": r["등급"],
             "app_rank": r["순위"], "app_accept_status": r["수용"], "app_er_beds": r["응급실 가용/기준"],
-            "app_distance_km": r["거리(km)"], "call_time": call_time.strip() or tlog.now_kst().strftime("%H:%M"),
+            "app_distance_km": r["거리(km)"],
+            "_call_time_exact": call_time.strip() or tlog.now_hhmm_exact(),   # 소요시간 계산용, 저장 전 제거
+            "call_time": tlog.floor_hhmm(call_time.strip() or tlog.now_hhmm_exact()),
             "call_logged_at": tlog.now_str(), "call_result": call_result,
             "refusal_reason": refusal if call_result != "수용" else "",
             "habitual": "Y" if habitual else "N", "deviation_reason": deviation,
@@ -706,10 +708,13 @@ if saved:
                 "age_band": age_band, "sex": sex_, "ktas": ktas,
                 "diagnosis": chosen_dx.name if chosen_dx else "", "category_no": severe_n or "",
                 "category_name": api.SEVERE_TYPES.get(severe_n, "") if severe_n else "", "app_top5": _top5,
-                "episode_outcome": outcome, "decision_time": decision_time, "accept_time": accept_time, "note": note}
+                "episode_outcome": outcome,
+                "decision_time": tlog.floor_hhmm(decision_time), "accept_time": tlog.floor_hhmm(accept_time),
+                "decision_to_accept_min": tlog.minutes_between(decision_time, accept_time), "note": note}
         out_rows = []
         for c in ep["calls"] or [{}]:
             r = dict(base); r.update(c); r["final_accepted"] = "Y" if c.get("hospital_hpid") and c.get("hospital_hpid") == accepted_hp else "N"
+            r["call_offset_min"] = tlog.minutes_between(decision_time, r.pop("_call_time_exact", ""))
             out_rows.append(r)
         try:
             _store.append(out_rows)

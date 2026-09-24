@@ -24,11 +24,51 @@ KST = ZoneInfo("Asia/Seoul")
 
 def now_kst() -> datetime:
     return datetime.now(KST)
+
+
 from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# 시각 저장 규칙 (IRB 연구계획서 v3.3, 4.3·5.2)
+#   - 절대 시각은 30분 구간으로 내림하여 저장한다 (예: 14:47 → 14:30).
+#   - 소요시간(분)은 내림 전 정확한 입력값으로 계산하여 별도 열에 저장한다.
+#   - episode_id 에는 날짜만 넣고 시:분:초는 넣지 않는다.
+# ---------------------------------------------------------------------------
+TIME_BUCKET_MIN = 30
+
+
+def floor_dt(dt: datetime, bucket: int = TIME_BUCKET_MIN) -> datetime:
+    return dt.replace(minute=(dt.minute // bucket) * bucket, second=0, microsecond=0)
+
+
+def floor_hhmm(s: str, bucket: int = TIME_BUCKET_MIN) -> str:
+    """'HH:MM' 문자열을 30분 구간으로 내림. 형식이 아니면 빈 문자열."""
+    s = (s or "").strip()
+    try:
+        h, m = s.split(":")
+        h, m = int(h), int(m)
+        if not (0 <= h < 24 and 0 <= m < 60):
+            return ""
+        return f"{h:02d}:{(m // bucket) * bucket:02d}"
+    except Exception:
+        return ""
+
+
+def minutes_between(start_hhmm: str, end_hhmm: str) -> str:
+    """두 'HH:MM' 사이의 분(자정 넘김은 +24h). 둘 중 하나라도 없으면 ''."""
+    try:
+        sh, sm = map(int, start_hhmm.strip().split(":"))
+        eh, em = map(int, end_hhmm.strip().split(":"))
+    except Exception:
+        return ""
+    d = (eh * 60 + em) - (sh * 60 + sm)
+    if d < -720:
+        d += 24 * 60
+    return str(d)
 
 FIELDS = [
     "episode_id",        # 전원 에피소드 ID (같은 환자의 연락 시도들을 묶음)
-    "logged_at",         # 기록 시각
+    "logged_at",         # 기록 시각 (30분 구간으로 내림)
     "origin_hpid", "origin_name",
     "age_band", "sex", "ktas",           # 선택 입력 (식별 불가 수준)
     "diagnosis", "category_no", "category_name",
@@ -36,16 +76,18 @@ FIELDS = [
     "call_order",        # 이 병원이 몇 번째 연락인지
     "hospital_hpid", "hospital_name", "hospital_level",
     "app_rank", "app_accept_status", "app_er_beds", "app_distance_km",
-    "call_time",         # 연락 시각 (사용자 입력, HH:MM)
-    "call_logged_at",    # '목록에 추가'를 누른 실제 시각 (자동)
+    "call_time",         # 연락 시각 (사용자 입력 HH:MM → 30분 구간으로 내림 저장)
+    "call_logged_at",    # '목록에 추가'를 누른 시각 (자동, 30분 구간으로 내림)
+    "call_offset_min",   # 전원 결정 시각부터 이 연락까지 분 (정확한 입력값으로 계산)
     "call_result",       # 수용 / 거부 / 무응답·보류
     "refusal_reason",    # 거부 사유
     "habitual",          # 평소 전원하던 기관 여부 (Y/N)
     "deviation_reason",  # 앱 1순위가 아닌 기관에 먼저 연락한 사유 (첫 연락에만 기록)
     "final_accepted",    # 이 병원으로 최종 전원 여부 (Y/N)
     "episode_outcome",   # 전원 완료 / 전원 못함(자체 처치) / 전원 못함(사망) / 기타
-    "decision_time",     # 전원 결정 시각 (HH:MM)
-    "accept_time",       # 수용 확정 시각 (HH:MM)
+    "decision_time",     # 전원 결정 시각 (HH:MM → 30분 구간으로 내림 저장)
+    "accept_time",       # 수용 확정 시각 (HH:MM → 30분 구간으로 내림 저장)
+    "decision_to_accept_min",  # 결정→수용 확정 소요 분 (정확한 입력값으로 계산)
     "note",
 ]
 
@@ -131,8 +173,15 @@ def make_store(app_dir: Path, secrets_get) -> tuple[object, str | None]:
 
 
 def new_episode_id() -> str:
-    return now_kst().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
+    """날짜 + 난수. 시:분:초는 넣지 않는다."""
+    return now_kst().strftime("%Y%m%d-") + uuid.uuid4().hex[:8]
 
 
 def now_str() -> str:
-    return now_kst().strftime("%Y-%m-%d %H:%M:%S")
+    """현재 시각을 30분 구간으로 내림한 'YYYY-MM-DD HH:MM'."""
+    return floor_dt(now_kst()).strftime("%Y-%m-%d %H:%M")
+
+
+def now_hhmm_exact() -> str:
+    """내림 전 현재 'HH:MM' (소요시간 계산용, 저장하지 않음)."""
+    return now_kst().strftime("%H:%M")
