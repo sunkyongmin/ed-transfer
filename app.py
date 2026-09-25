@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -529,7 +530,9 @@ def sort_key(h: api.Hospital) -> tuple:
 cands.sort(key=sort_key)
 
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("기준 위치", origin_label)
+_short = re.sub(r"^(의료법인|학교법인|재단법인|사회복지법인|사단법인)\s*\S*?(?=[가-힣]*병원)", "", origin_label).strip() or origin_label
+m1.markdown("<div style='font-size:0.8rem;color:#6c757d'>기준 위치</div>"
+            f"<div style='font-size:1.15rem;font-weight:600;line-height:1.3'>{_short}</div>", unsafe_allow_html=True)
 m2.metric("후보 병원 수", len(cands))
 if severe_n:
     m3.metric("수용 가능 확인", sum(1 for h in cands if api.severe_status(h, severe_n) == "가능" and not api.blocked_for(h, severe_n)))
