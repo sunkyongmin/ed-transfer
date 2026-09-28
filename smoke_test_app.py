@@ -16,6 +16,19 @@ class _Any:
 class _Stop(Exception): pass
 
 st = types.ModuleType("streamlit")
+class _SessionState(dict):
+    def __getattr__(self, k):
+        try: return self[k]
+        except KeyError: raise AttributeError(k)
+    def __setattr__(self, k, v): self[k] = v
+    def __delattr__(self, k): self.pop(k, None)
+st.session_state = _SessionState()
+st.query_params = {}
+st.__getattr__ = lambda name: _Any()
+try:
+    import pydeck  # noqa: F401
+except ImportError:
+    sys.modules["pydeck"] = types.SimpleNamespace(Deck=_Any(), ViewState=_Any(), Layer=_Any())
 calls = {}
 def _rec(name, ret):
     def f(*a, **k):
@@ -27,7 +40,7 @@ def radio(label, options, index=0, **k): return options[index]
 SEL, MS = {}, {}
 st.set_page_config = _rec("cfg", None)
 st.sidebar = _Any(); st.title = _rec("title", None); st.caption = _rec("caption", None)
-st.text_input = lambda *a, **k: "DUMMYKEY"
+st.text_input = lambda label="", *a, **k: "DUMMYKEY" if "인증키" in str(label) else ""
 st.divider = _rec("div", None); st.subheader = _rec("sub", None)
 st.selectbox = selectbox; st.multiselect = multiselect; st.radio = radio
 st.number_input = lambda *a, value=0, **k: value
@@ -40,7 +53,7 @@ def stop(): raise _Stop()
 st.stop = stop
 st.spinner = lambda *a, **k: _Any()
 st.metric = _rec("metric", None); st.markdown = _rec("md", None); st.write = _rec("write", None)
-st.dataframe = _rec("dataframe", None); st.map = _rec("map", None)
+st.dataframe = _rec("dataframe", None); st.map = _rec("map", None); st.pydeck_chart = _rec("pydeck", None)
 st.tabs = lambda names: [_Any() for _ in names]
 st.column_config = _Any()
 class _CD:
@@ -52,7 +65,7 @@ class _CD:
 st.cache_data = _CD()
 class _Secrets(dict):
     pass
-st.secrets = _Secrets()
+st.secrets = _Secrets(NEMC_API_KEY="DUMMYKEY")
 sys.modules["streamlit"] = st
 
 # --- API 스텁: 샘플 XML 반환 ---------------------------------------------------

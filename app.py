@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import pydeck as pdk
 import streamlit as st
 
 import nemc_api as api
@@ -379,7 +380,7 @@ with st.sidebar:
     max_km = st.slider("최대 거리 (km, 직선)", 3, 500, 15)
     level_sel = st.multiselect("기관 등급", ["권역응급의료센터", "지역응급의료센터", "지역응급의료기관", "응급실운영신고기관"],
                                default=["권역응급의료센터", "지역응급의료센터"])
-    min_er = st.number_input("응급실 일반 병상 최소 가용 수", min_value=0, max_value=20, value=1)
+    min_er = 1
     sort_mode = st.radio("정렬", ["수용가능 → 거리", "거리만", "수용가능 → 등급 → 거리"], index=0)
     sort_mode_key = {"수용가능 → 거리": "distance_accept", "거리만": "distance_only",
                      "수용가능 → 등급 → 거리": "level_first"}[sort_mode]
@@ -426,14 +427,13 @@ def _cat_label(i: int) -> str:
     return f"{name}  →  {api.SEVERE_TYPES.get(cat, '분류 외') if cat else '분류 외'}"
 
 sel_idx = st.selectbox("추정 진단 선택", options=hits, format_func=_cat_label, key="dx_catalog_pick")
-d1c, d2c = st.columns([1, 3])
-if d1c.button("✅ 이 진단으로 전원병원 검색", type="primary", use_container_width=True):
+if st.button("✅ 이 진단으로 전원병원 검색", type="primary", use_container_width=True):
     st.session_state.dx_list = [tr.catalog_dx(sel_idx)]
     st.session_state.dx_pick = 0
     st.rerun()
 _n = tr.DIAGNOSIS_CATALOG[sel_idx][4]
 if _n:
-    d2c.caption("비고: " + _n)
+    st.caption("비고: " + _n)
 
 # ---------------------------------------------------------------------------
 # 선택 진단 → 분류·필요자원
@@ -537,7 +537,7 @@ m2.metric("후보 병원 수", len(cands))
 if severe_n:
     m3.metric("수용 가능 확인", sum(1 for h in cands if api.severe_status(h, severe_n) == "가능" and not api.blocked_for(h, severe_n)))
 else:
-    m3.metric("응급실 병상 ≥ 기준", sum(1 for h in cands if (h.bed("hvec") or 0) >= min_er))
+    m3.metric("응급실 병상 여유(≥1)", sum(1 for h in cands if (h.bed("hvec") or 0) >= min_er))
 m4.metric("실시간 조회 시각", fetched_at.split(" ")[1])
 if severe_n:
     st.caption(f"조회 분류: **{api.SEVERE_TYPES[severe_n]}** — 기관별 수용가능 자가입력값과 수용불가 메시지를 함께 반영합니다.")
@@ -626,15 +626,51 @@ with tab1:
 
 with tab2:
     m = df.dropna(subset=["_lat", "_lon"]).copy()
-    def _color(v: str):
-        if v.startswith("🟢"): return "#2e7d32"
-        if v.startswith("🔴") or v.startswith("⛔"): return "#c62828"
-        return "#1565c0"
-    m["color"] = m["수용"].map(_color); m["size"] = 120
-    origin_df = pd.DataFrame([{"_lat": olat, "_lon": olon, "color": "#ff9800", "size": 200}])
-    st.map(pd.concat([m[["_lat", "_lon", "color", "size"]], origin_df]), latitude="_lat", longitude="_lon",
-           color="color", size="size", zoom=11)
-    st.caption("주황: 동신병원 · 초록: 수용가능 · 빨강: 불가/차단 · 파랑: 정보없음")
+    _GREEN, _RED, _GRAY, _ORANGE = [46, 125, 50], [198, 40, 40], [158, 158, 158], [255, 152, 0]
+    def _rgb(v: str):
+        if v.startswith("🟢"): return _GREEN
+        if v.startswith("🔴") or v.startswith("⛔"): return _RED
+        return _GRAY
+    def _short_name(n: str) -> str:
+        full = (n or "").strip(); s_ = full
+        par = re.search(r"\(([^()]*병원)\)\s*$", s_)
+        tail = par.group(1) if par else None
+        s_ = re.sub(r"\([^()]*\)\s*$", "", s_).strip()
+        if " " in s_ and "병원" in s_.split()[-1]:
+            s_ = s_.split()[-1]
+        s_ = re.sub(r"^(의료법인|학교법인|재단법인|사회복지법인|사단법인|서울특별시)", "", s_)
+        u = re.match(r"^(.*?)대학교", s_)
+        uni = (re.sub(r"^.*(학원|재단)", "", u.group(1)) + "대") if u else ""
+        while True:
+            mm = re.match(r"^.*?(대학교|의과대학|부속|부설|학원|재단)(.{2,}(병원|의료원).*)$", s_)
+            if not mm: break
+            s_ = mm.group(2)
+        if tail: s_ = tail
+        if len(s_) <= 4 and uni and not s_.startswith(uni[:-1]):
+            s_ = f"{uni} {s_}"
+        return s_ or full
+    m["rgb"] = m["수용"].map(_rgb)
+    m["label"] = m["병원"].map(_short_name)
+    m["tip"] = m["순위"].astype(str) + ". " + m["병원"] + " · " + m["수용"] + " · " + m["거리(km)"].astype(str) + "km"
+    m["r"] = 160
+    _origin_name = _short_name(origin_label)
+    _o = pd.DataFrame([{"_lat": olat, "_lon": olon, "rgb": _ORANGE, "label": _origin_name,
+                        "tip": f"기준: {origin_label}", "r": 220}])
+    _pts = pd.concat([m[["_lat", "_lon", "rgb", "label", "tip", "r"]], _o], ignore_index=True)
+    st.pydeck_chart(pdk.Deck(
+        initial_view_state=pdk.ViewState(latitude=olat, longitude=olon, zoom=11),
+        layers=[
+            pdk.Layer("ScatterplotLayer", data=_pts, get_position="[_lon, _lat]", get_fill_color="rgb",
+                      get_radius="r", radius_min_pixels=5, radius_max_pixels=14, pickable=True,
+                      stroked=True, get_line_color=[255, 255, 255], line_width_min_pixels=1),
+            pdk.Layer("TextLayer", data=_pts, get_position="[_lon, _lat]", get_text="label",
+                      get_size=12, get_color=[33, 33, 33], get_pixel_offset=[0, -16],
+                      character_set="auto", font_family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
+                      background=True, get_background_color=[255, 255, 255, 210]),
+        ],
+        tooltip={"text": "{tip}"},
+    ), use_container_width=True)
+    st.caption(f"주황: {_origin_name}(기준) · 초록: 수용가능 · 빨강: 불가/차단 · 회색: 정보없음 · 점에 마우스를 올리면(휴대폰은 탭) 상세")
 
 # ---------------------------------------------------------------------------
 # 3. 전원 기록 (연구용 로그 — 환자 식별정보 없음)
