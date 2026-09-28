@@ -67,6 +67,9 @@ class _Secrets(dict):
     pass
 st.secrets = _Secrets(NEMC_API_KEY="DUMMYKEY")
 sys.modules["streamlit"] = st
+_cv1 = types.ModuleType("streamlit.components.v1"); _cv1.html = _rec("html", None)
+_cmp = types.ModuleType("streamlit.components"); _cmp.v1 = _cv1
+sys.modules["streamlit.components"] = _cmp; sys.modules["streamlit.components.v1"] = _cv1
 
 # --- API 스텁: 샘플 XML 반환 ---------------------------------------------------
 def fake_call(key, op, params, **k):
