@@ -542,6 +542,16 @@ m4.metric("실시간 조회 시각", fetched_at.split(" ")[1])
 if severe_n:
     st.caption(f"조회 분류: **{api.SEVERE_TYPES[severe_n]}** — 기관별 수용가능 자가입력값과 수용불가 메시지를 함께 반영합니다.")
 
+def _kakao_route(name: str, lat, lon) -> str:
+    """카카오맵 길찾기 URL (출발: 기준 병원). 형식: map.kakao.com/link/from/이름,위도,경도/to/이름,위도,경도"""
+    if lat is None or lon is None:
+        return ""
+    from urllib.parse import quote
+    def _n(x: str) -> str:
+        return quote((x or "").replace(",", " ").replace("/", " ").strip() or "병원")
+    return (f"https://map.kakao.com/link/from/{_n(origin_label)},{olat},{olon}"
+            f"/to/{_n(name)},{lat},{lon}")
+
 rows = []
 for i, h in enumerate(cands, 1):
     er, er_std = h.bed("hvec"), h.bed("hvs01")
@@ -564,6 +574,7 @@ for i, h in enumerate(cands, 1):
         "CT/MRI/혈관촬영/Venti": "/".join((h.equip(k) or "?") for k in ("hvctayn", "hvmriayn", "hvangioayn", "hvventiayn")),
         "메시지": " | ".join(api.blocked_for(h, severe_n))[:120],
         "응급실 전화": h.tel_er or h.tel_main,
+        "길찾기": _kakao_route(h.name, h.lat, h.lon),
         "갱신": f"{h.beds_updated[8:10]}:{h.beds_updated[10:12]}" if len(h.beds_updated) >= 12 else "",
         "_lat": h.lat, "_lon": h.lon, "_hpid": h.hpid,
     })
@@ -578,7 +589,8 @@ with tab1:
                  height=min(60 + 35 * len(df), 700),
                  column_config={"순위": st.column_config.NumberColumn(width="small"),
                                 "거리(km)": st.column_config.NumberColumn(format="%.1f", width="small"),
-                                "메시지": st.column_config.TextColumn(width="large")})
+                                "메시지": st.column_config.TextColumn(width="large"),
+                                "길찾기": st.column_config.LinkColumn("길찾기", display_text="🚑 카카오맵", width="small")})
 
     st.markdown("**병원 상세**")
     pick_h = st.selectbox("병원 선택", options=[h.hpid for h in cands],
@@ -589,6 +601,9 @@ with tab1:
         st.markdown(f"**{h.name}** — {h.emcls_name}  \n{h.addr}  \n"
                     f"응급실 ☎ **{h.tel_er or '-'}** / 대표 ☎ {h.tel_main or '-'}  \n"
                     f"직선거리 {h.distance_km:.1f} km · 병상정보 입력 {h.beds_updated or '-'}")
+        _route = _kakao_route(h.name, h.lat, h.lon)
+        if _route:
+            st.link_button("🚑 카카오맵 길찾기 (기준 병원 → 이 병원)", _route, use_container_width=True)
         if h.messages:
             st.markdown("**현재 메시지**")
             for m in h.messages:
