@@ -642,7 +642,7 @@ with tab1:
 
 with tab2:
     m = df.dropna(subset=["_lat", "_lon"]).copy()
-    _GREEN, _RED, _GRAY, _ORANGE = [46, 125, 50], [198, 40, 40], [158, 158, 158], [255, 152, 0]
+    _GREEN, _RED, _GRAY, _ORANGE = [46, 160, 60], [214, 40, 40], [176, 176, 176], [255, 140, 0]
     def _rgb(v: str):
         if v.startswith("🟢"): return _GREEN
         if v.startswith("🔴") or v.startswith("⛔"): return _RED
@@ -684,9 +684,10 @@ with tab2:
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   html,body{margin:0;height:100%}
-  #map{height:520px;border-radius:8px}
-  .lbl{background:rgba(255,255,255,.88);border:0;box-shadow:0 1px 2px rgba(0,0,0,.25);
-       font:600 12px 'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#212121;padding:1px 5px}
+  #map{height:520px;border-radius:8px;background:#f2f2f2}
+  .leaflet-tile-pane{filter:grayscale(1) brightness(1.12) contrast(.78);opacity:.55}
+  .lbl{background:#ffffff;border:1px solid #757575;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.35);
+       font:700 13px 'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#111111;padding:1px 6px}
   .lbl:before{display:none}
   .pop a{display:inline-block;margin-top:6px;padding:6px 10px;background:#fee500;color:#191919;
          border-radius:6px;text-decoration:none;font-weight:700}
@@ -702,7 +703,7 @@ const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const bounds = [];
 P.forEach(p => {
   const mk = L.circleMarker([p.lat, p.lon], {
-    radius: p.origin ? 10 : 8, color: '#ffffff', weight: 1.5, fillColor: p.color, fillOpacity: .95});
+    radius: p.origin ? 12 : 10, color: '#212121', weight: 2, fillColor: p.color, fillOpacity: 1});
   mk.addTo(map);
   mk.bindTooltip(esc(p.label), {permanent: true, direction: 'top', offset: [0, -8], className: 'lbl'});
   mk.bindPopup('<div class="pop">' + esc(p.tip) +
