@@ -16,6 +16,7 @@ from pathlib import Path
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
+import streamlit.components.v1 as components
 
 import nemc_api as api
 import transfer_log as tlog
@@ -674,30 +675,53 @@ with tab2:
     _o = pd.DataFrame([{"_lat": olat, "_lon": olon, "rgb": _ORANGE, "label": _origin_name,
                         "tip": f"기준: {origin_label}", "r": 220, "full": origin_label, "url": ""}])
     _pts = pd.concat([m[["_lat", "_lon", "rgb", "label", "tip", "r", "full", "url"]], _o], ignore_index=True)
-    _ev = st.pydeck_chart(pdk.Deck(
-        initial_view_state=pdk.ViewState(latitude=olat, longitude=olon, zoom=11),
-        layers=[
-            pdk.Layer("ScatterplotLayer", id="hospitals", data=_pts, get_position="[_lon, _lat]", get_fill_color="rgb",
-                      get_radius="r", radius_min_pixels=5, radius_max_pixels=14, pickable=True,
-                      stroked=True, get_line_color=[255, 255, 255], line_width_min_pixels=1),
-            pdk.Layer("TextLayer", data=_pts, get_position="[_lon, _lat]", get_text="label",
-                      get_size=12, get_color=[33, 33, 33], get_pixel_offset=[0, -16],
-                      character_set="auto", font_family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif",
-                      background=True, get_background_color=[255, 255, 255, 210]),
-        ],
-        tooltip={"text": "{tip}"},
-    ), use_container_width=True, on_select="rerun", selection_mode="single-object", key="map_pick")
-    _sel = []
-    try:
-        _sel = (_ev.selection.get("objects", {}) or {}).get("hospitals", []) if _ev else []
-    except Exception:
-        _sel = []
-    if _sel and _sel[0].get("url"):
-        st.link_button(f"🚑 카카오맵 길찾기: {_sel[0].get('full', '')}", _sel[0]["url"], type="primary",
-                       use_container_width=True)
-    elif _sel:
-        st.caption(f"선택: {_sel[0].get('full', '')} (기준 병원)")
-    st.caption(f"주황: {_origin_name}(기준) · 초록: 수용가능 · 빨강: 불가/차단 · 회색: 정보없음 · 점을 누르면 아래에 카카오맵 길찾기 버튼")
+    _pts_js = [{"lat": float(r["_lat"]), "lon": float(r["_lon"]),
+                "color": "#%02x%02x%02x" % tuple(r["rgb"][:3]), "label": str(r["label"]),
+                "tip": str(r["tip"]), "url": str(r["url"] or ""), "origin": not r["url"]}
+               for _, r in _pts.iterrows()]
+    _html = """
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  html,body{margin:0;height:100%}
+  #map{height:520px;border-radius:8px}
+  .lbl{background:rgba(255,255,255,.88);border:0;box-shadow:0 1px 2px rgba(0,0,0,.25);
+       font:600 12px 'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#212121;padding:1px 5px}
+  .lbl:before{display:none}
+  .pop a{display:inline-block;margin-top:6px;padding:6px 10px;background:#fee500;color:#191919;
+         border-radius:6px;text-decoration:none;font-weight:700}
+</style>
+<div id="map"></div>
+<script>
+const P = __PTS__;
+const map = L.map('map', {zoomControl: true});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19, subdomains: 'abcd',
+  attribution: '&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
+const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const bounds = [];
+P.forEach(p => {
+  const mk = L.circleMarker([p.lat, p.lon], {
+    radius: p.origin ? 10 : 8, color: '#ffffff', weight: 1.5, fillColor: p.color, fillOpacity: .95});
+  mk.addTo(map);
+  mk.bindTooltip(esc(p.label), {permanent: true, direction: 'top', offset: [0, -8], className: 'lbl'});
+  mk.bindPopup('<div class="pop">' + esc(p.tip) +
+    (p.url ? '<br><a href="' + p.url + '" target="_blank" rel="noopener">🚑 카카오맵 길찾기</a>' : '') + '</div>');
+  if (p.url) {
+    mk.on('click', () => {
+      const w = window.open(p.url, '_blank');
+      if (w) { try { w.opener = null; } catch (e) {} mk.closePopup(); }
+    });
+  }
+  bounds.push([p.lat, p.lon]);
+});
+if (bounds.length > 1) { map.fitBounds(bounds, {padding: [30, 30], maxZoom: 13}); }
+else if (bounds.length) { map.setView(bounds[0], 12); }
+</script>
+""".replace("__PTS__", json.dumps(_pts_js, ensure_ascii=False))
+    components.html(_html, height=530)
+    st.caption(f"주황: {_origin_name}(기준) · 초록: 수용가능 · 빨강: 불가/차단 · 회색: 정보없음 · "
+               "원을 누르면 카카오맵 길찾기가 새 탭으로 열립니다 (브라우저가 막으면 뜨는 창의 노란 버튼을 누르세요)")
 
 # ---------------------------------------------------------------------------
 # 3. 전원 기록 (연구용 로그 — 환자 식별정보 없음)
