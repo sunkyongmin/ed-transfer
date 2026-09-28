@@ -668,14 +668,16 @@ with tab2:
     m["label"] = m["병원"].map(_short_name)
     m["tip"] = m["순위"].astype(str) + ". " + m["병원"] + " · " + m["수용"] + " · " + m["거리(km)"].astype(str) + "km"
     m["r"] = 160
+    m["full"] = m["병원"]
+    m["url"] = [_kakao_route(n, la, lo) for n, la, lo in zip(m["병원"], m["_lat"], m["_lon"])]
     _origin_name = _short_name(origin_label)
     _o = pd.DataFrame([{"_lat": olat, "_lon": olon, "rgb": _ORANGE, "label": _origin_name,
-                        "tip": f"기준: {origin_label}", "r": 220}])
-    _pts = pd.concat([m[["_lat", "_lon", "rgb", "label", "tip", "r"]], _o], ignore_index=True)
-    st.pydeck_chart(pdk.Deck(
+                        "tip": f"기준: {origin_label}", "r": 220, "full": origin_label, "url": ""}])
+    _pts = pd.concat([m[["_lat", "_lon", "rgb", "label", "tip", "r", "full", "url"]], _o], ignore_index=True)
+    _ev = st.pydeck_chart(pdk.Deck(
         initial_view_state=pdk.ViewState(latitude=olat, longitude=olon, zoom=11),
         layers=[
-            pdk.Layer("ScatterplotLayer", data=_pts, get_position="[_lon, _lat]", get_fill_color="rgb",
+            pdk.Layer("ScatterplotLayer", id="hospitals", data=_pts, get_position="[_lon, _lat]", get_fill_color="rgb",
                       get_radius="r", radius_min_pixels=5, radius_max_pixels=14, pickable=True,
                       stroked=True, get_line_color=[255, 255, 255], line_width_min_pixels=1),
             pdk.Layer("TextLayer", data=_pts, get_position="[_lon, _lat]", get_text="label",
@@ -684,8 +686,18 @@ with tab2:
                       background=True, get_background_color=[255, 255, 255, 210]),
         ],
         tooltip={"text": "{tip}"},
-    ), use_container_width=True)
-    st.caption(f"주황: {_origin_name}(기준) · 초록: 수용가능 · 빨강: 불가/차단 · 회색: 정보없음 · 점에 마우스를 올리면(휴대폰은 탭) 상세")
+    ), use_container_width=True, on_select="rerun", selection_mode="single-object", key="map_pick")
+    _sel = []
+    try:
+        _sel = (_ev.selection.get("objects", {}) or {}).get("hospitals", []) if _ev else []
+    except Exception:
+        _sel = []
+    if _sel and _sel[0].get("url"):
+        st.link_button(f"🚑 카카오맵 길찾기: {_sel[0].get('full', '')}", _sel[0]["url"], type="primary",
+                       use_container_width=True)
+    elif _sel:
+        st.caption(f"선택: {_sel[0].get('full', '')} (기준 병원)")
+    st.caption(f"주황: {_origin_name}(기준) · 초록: 수용가능 · 빨강: 불가/차단 · 회색: 정보없음 · 점을 누르면 아래에 카카오맵 길찾기 버튼")
 
 # ---------------------------------------------------------------------------
 # 3. 전원 기록 (연구용 로그 — 환자 식별정보 없음)
