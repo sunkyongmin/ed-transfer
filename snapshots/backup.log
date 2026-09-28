@@ -34,3 +34,8 @@ fatal: could not read Username for 'https://github.com': Device not configured
 To github-edtransfer:sunkyongmin/ed-transfer.git
    aacf288..64ee2ae  main -> main
 20260927_0305 backup done
+[main 037d16e] snapshots backup 20260928_0305
+ 5 files changed, 83306 insertions(+)
+To github-edtransfer:sunkyongmin/ed-transfer.git
+   64ee2ae..037d16e  main -> main
+20260928_0305 backup done
