@@ -39,3 +39,11 @@ To github-edtransfer:sunkyongmin/ed-transfer.git
 To github-edtransfer:sunkyongmin/ed-transfer.git
    64ee2ae..037d16e  main -> main
 20260928_0305 backup done
+[main 077278d] snapshots backup 20260929_0305
+ 5 files changed, 78389 insertions(+)
+remote: warning: See https://gh.io/lfs for more information.        
+remote: warning: File snapshots/messages_202609.csv is 59.99 MB; this is larger than GitHub's recommended maximum file size of 50.00 MB        
+remote: warning: GH001: Large files detected. You may want to try Git Large File Storage - https://git-lfs.github.com.        
+To github-edtransfer:sunkyongmin/ed-transfer.git
+   6feac3a..077278d  main -> main
+20260929_0305 backup done
