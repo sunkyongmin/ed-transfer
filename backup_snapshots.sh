@@ -2,9 +2,10 @@
 export PATH=/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin:$PATH
 cd ~/bigdata/ed-transfer || exit 1
 STAMP=$(date +%Y%m%d_%H%M)
-mkdir -p ~/Library/Mobile\ Documents/com~apple~CloudDocs/ed-transfer-snapshots
-cp snapshots/*.csv snapshots/collector.log ~/Library/Mobile\ Documents/com~apple~CloudDocs/ed-transfer-snapshots/
-git add snapshots
-git commit -m "snapshots backup $STAMP" >> snapshots/backup.log 2>&1
-git push >> snapshots/backup.log 2>&1
-echo "$STAMP backup done" >> snapshots/backup.log
+DEST=~/Library/Mobile\ Documents/com~apple~CloudDocs/ed-transfer-snapshots
+mkdir -p "$DEST"
+for f in snapshots/*.csv; do
+  gzip -c "$f" > "$DEST/$(basename "$f").gz"
+done
+cp snapshots/collector.log "$DEST/"
+echo "$STAMP backup done (iCloud gz)" >> snapshots/backup.log
