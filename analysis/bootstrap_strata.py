@@ -60,7 +60,7 @@ def main():
     k = sm.drop_duplicates(["collected_at", "hpid", "n"])[["collected_at", "hpid", "n"]].merge(L, on=["collected_at", "hpid", "n"])
     contra = k[k.val == "Y"].drop_duplicates(["collected_at", "hpid"])[["collected_at", "hpid"]].assign(c=True)
     v = v.merge(contra, on=["collected_at", "hpid"], how="left")
-    v["c"] = v.c.fillna(False)
+    v["c"] = v.c.eq(True)
     inst = b.drop_duplicates("hpid")[["hpid", "emcls_name"]].assign(posted=lambda d: d.hpid.isin(ms.hpid))
 
     rng = np.random.default_rng(a.seed)

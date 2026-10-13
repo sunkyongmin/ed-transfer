@@ -9,6 +9,12 @@
 | `figures.py` | 포스터 그림 4장 (300dpi PNG) | `그림1~4_*.png` |
 | `common.py` | 공통 로더·신뢰구간·인자 | |
 
+## 의존성
+
+```
+pip install pandas numpy matplotlib
+```
+
 ## 실행
 
 리포지토리 루트에서, 가상환경을 켠 뒤:
