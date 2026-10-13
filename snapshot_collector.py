@@ -27,7 +27,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -123,9 +123,9 @@ def sidos_due(regions: list[str], fast_min: int, slow_min: int, now: datetime) -
 
 
 def sleep_to_next_boundary(now: datetime):
-    nxt = ((now.minute // 30) + 1) * 30
-    wait = (nxt - now.minute) * 60 - now.second
-    time.sleep(max(wait, 1))
+    base = now.replace(minute=(now.minute // 30) * 30, second=0, microsecond=0)
+    nxt = base + timedelta(minutes=30)
+    time.sleep(max((nxt - now).total_seconds() + 2, 1))
 
 
 def collect_once(key: str, regions: list[str]):
