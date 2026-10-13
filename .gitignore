@@ -11,3 +11,4 @@ transfer_log*.csv*
 snapshots/
 analysis_out/
 analysis/out/
+snapshots_server/
