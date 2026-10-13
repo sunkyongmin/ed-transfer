@@ -10,3 +10,4 @@ transfer_log*.csv*
 *.bak
 snapshots/
 analysis_out/
+analysis/out/
