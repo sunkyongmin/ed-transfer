@@ -9,3 +9,4 @@ __pycache__/
 transfer_log*.csv*
 *.bak
 snapshots/
+analysis_out/

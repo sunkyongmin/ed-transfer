@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import json
 import os
 import sys
@@ -60,6 +61,13 @@ def log(msg: str):
     print(line, flush=True)
     with (OUT_DIR / "collector.log").open("a", encoding="utf-8") as f:
         f.write(line + "\n")
+
+
+MOBILE_RE = re.compile(r"01[016789][-. ]?\d{3,4}[-. ]?\d{4}")
+
+
+def mask_mobile(text):
+    return MOBILE_RE.sub("[휴대전화]", text) if isinstance(text, str) else text
 
 
 def append_rows(path: Path, rows: list[dict], fixed_first: list[str]):
@@ -140,7 +148,7 @@ def collect_once(key: str, regions: list[str]):
             n_sev = -1; log(f"[{sido}] 수용가능 조회 실패: {e}")
         try:
             msgs = fetch_region(key, sido, api.fetch_messages)
-            rows = [{"collected_at": ts, "sido": sido, **m} for lst in msgs.values() for m in lst]
+            rows = [{"collected_at": ts, "sido": sido, **{k: mask_mobile(v) for k, v in m.items()}} for lst in msgs.values() for m in lst]
             append_rows(OUT_DIR / f"messages_{ym}.csv", rows,
                         ["collected_at", "sido", "hpid", "dutyName", "symBlkMsgTyp", "symTypCod", "symTypCodMag",
                          "symBlkMsg", "symBlkSttDtm", "symBlkEndDtm"])
