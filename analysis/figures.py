@@ -32,7 +32,7 @@ def korean_font():
 
 
 def main():
-    a = parse_args("포스터 그림", lambda ap: (ap.add_argument("--n-label", default="44,139,233"), ap.add_argument("--subtitle", default="전국 응급의료기관, 30분 간격")))
+    a = parse_args("포스터 그림", lambda ap: (ap.add_argument("--n-label", default="44,139,233"), ap.add_argument("--subtitle", default="전국 응급의료기관, 30분 간격"), ap.add_argument("--no-title", action="store_true", help="그림 안 제목 생략(포스터 캡션용)")))
     ns = a.n_label.split(",")
     SH = {c: f"{t} (n={n})" for c, t, n in zip(CL, TIERS, ns)}
     plt.rcParams.update({"font.family": korean_font(), "font.size": 10, "axes.edgecolor": "#c3c2b7", "axes.labelcolor": "#52514e",
@@ -54,7 +54,7 @@ def main():
     for s in ax.spines.values():
         s.set_visible(False)
     ax.tick_params(length=0)
-    ax.set_title(f"중증응급질환 분류별 수용가능 정보 미입력 비율 (%)\n{a.subtitle}", fontsize=10.5, loc="left", color="#0b0b0b")
+    if not a.no_title: ax.set_title(f"중증응급질환 분류별 수용가능 정보 미입력 비율 (%)\n{a.subtitle}", fontsize=10.5, loc="left", color="#0b0b0b")
     cb = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02); cb.outline.set_visible(False); cb.set_label("미입력 %", color="#52514e")
     fig.tight_layout(); fig.savefig(outpath(a, "그림1_미입력_히트맵.png"), dpi=300); plt.close()
 
@@ -70,7 +70,7 @@ def main():
     ax.set_xlabel("기관 입력시각 → 수집시각 시차 (분, 70분에서 절단)"); ax.set_ylabel("기관-시점 누적 비율 (%)")
     ax.grid(axis="y", color="#e1e0d9", lw=0.6); ax.legend(frameon=False, loc="center right")
     med = round(b.lag.median(), 1); p60 = round(100 * (b.lag > 60).mean(), 1)
-    ax.set_title(f"병상 정보 입력-수집 시차의 누적분포: 중앙값 {med}분, 60분 초과 {p60}%", fontsize=10.5, loc="left", color="#0b0b0b")
+    if not a.no_title: ax.set_title(f"병상 정보 입력-수집 시차의 누적분포: 중앙값 {med}분, 60분 초과 {p60}%", fontsize=10.5, loc="left", color="#0b0b0b")
     fig.tight_layout(); fig.savefig(outpath(a, "그림2_시차_누적분포.png"), dpi=300); plt.close()
 
     # 그림3 시간대별 과밀 (bootstrap_strata.py 결과 필요)
@@ -87,7 +87,7 @@ def main():
             ax.set_title(tt, fontsize=10.5, loc="left", color="#0b0b0b"); ax.set_xticks(range(0, 24, 4)); ax.set_xlabel("시각")
             ax.grid(axis="y", color="#e1e0d9", lw=0.6); ax.set_xlim(0, 26)
         axes[0].set_ylabel("응급실 과밀 시점 비율 (%)\n(가용병상 음수 = 재실 환자 > 기준병상)"); axes[0].legend(frameon=False, fontsize=9)
-        fig.suptitle("시간대별 응급실 과밀", x=0.01, ha="left", fontsize=10.5, color="#0b0b0b")
+        if not a.no_title: fig.suptitle("시간대별 응급실 과밀", x=0.01, ha="left", fontsize=10.5, color="#0b0b0b")
         fig.tight_layout(); fig.savefig(outpath(a, "그림3_과밀_시간대.png"), dpi=300); plt.close()
 
     # 그림4 군집 부트스트랩 신뢰구간
@@ -107,7 +107,7 @@ def main():
                 ax.text(lx, i, f"{r.추정치:.1f}", ha=ha, va="center", fontsize=9, color="#0b0b0b")
             ax.set_yticks(range(3)); ax.set_yticklabels(TIERS); ax.set_xlim(0, 100); ax.set_ylim(2.6, -0.6)
             ax.set_title(nm, fontsize=10, loc="left", color="#0b0b0b"); ax.grid(axis="x", color="#e1e0d9", lw=0.6); ax.set_xlabel("기관-시점 비율 (%)")
-        fig.suptitle("종별 추정치와 기관 군집 부트스트랩 95% 신뢰구간", x=0.01, ha="left", fontsize=10.5, color="#0b0b0b")
+        if not a.no_title: fig.suptitle("종별 추정치와 기관 군집 부트스트랩 95% 신뢰구간", x=0.01, ha="left", fontsize=10.5, color="#0b0b0b")
         fig.tight_layout(); fig.savefig(outpath(a, "그림4_종별_신뢰구간.png"), dpi=300); plt.close()
     print("완료:", a.out)
 
