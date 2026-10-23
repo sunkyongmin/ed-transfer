@@ -41,7 +41,7 @@ components.html(
     """
 <script>
 (function () {
-  const TITLE = "전원병원";
+  const TITLE = "전원찾기";
   let base;
   try { base = window.parent.location.href; } catch (e) { return; }
   const icon = new URL("app/static/apple-touch-icon.png", base).href;
