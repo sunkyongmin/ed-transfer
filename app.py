@@ -35,6 +35,34 @@ import triage_rules as tr
 
 st.set_page_config(page_title="전원병원 선정 도우미", page_icon="🚑", layout="wide")
 
+# 아이폰 '홈 화면에 추가' 아이콘: static/apple-touch-icon.png 를 페이지 <head>에 연결
+# (.streamlit/config.toml 의 enableStaticServing = true 필요)
+components.html(
+    """
+<script>
+(function () {
+  const TITLE = "전원병원";
+  let base;
+  try { base = window.parent.location.href; } catch (e) { return; }
+  const icon = new URL("app/static/apple-touch-icon.png", base).href;
+  const targets = [];
+  try { targets.push(window.parent.document); } catch (e) {}
+  try { if (window.top !== window.parent) targets.push(window.top.document); } catch (e) {}
+  for (const d of targets) {
+    d.querySelectorAll('link[rel="apple-touch-icon"]').forEach(n => n.remove());
+    const l = d.createElement("link");
+    l.rel = "apple-touch-icon"; l.sizes = "180x180"; l.href = icon;
+    d.head.appendChild(l);
+    let m = d.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (!m) { m = d.createElement("meta"); m.name = "apple-mobile-web-app-title"; d.head.appendChild(m); }
+    m.content = TITLE;
+  }
+})();
+</script>
+""",
+    height=0,
+)
+
 # ---------------------------------------------------------------------------
 # 설정
 # ---------------------------------------------------------------------------
